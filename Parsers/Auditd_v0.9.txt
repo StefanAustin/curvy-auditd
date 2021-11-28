@@ -1,0 +1,55 @@
+// KQL Auditd Event Parser
+// Last Updated Date: Nov 28, 2021
+//
+// Auditd Instructions:
+// Kindly follow the excelent guide that is accessible through the red hat website at https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/security_guide/sec-starting_the_audit_service
+// The Parser has been tested against Ubuntu 20.04 
+//
+// Usage Instruction :
+// The usage instructions has been copied from https://github.com/Azure/Azure-Sentinel
+//
+// Paste below query in log analytics, click on Save button and select as Function from drop down by specifying function name and alias (e.g. Sysmon_Normalized).
+// Function usually takes 10-15 minutes to activate. You can then use function alias from any other queries (e.g. Auditd | take 10).
+// References : 
+// Using functions in Azure monitor log queries : https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+// Tech Community Blog on KQL Functions : https://techcommunity.microsoft.com/t5/Azure-Sentinel/Using-KQL-functions-to-speed-up-analysis-in-Azure-Sentinel/ba-p/712381
+//
+// Developer notes:
+// the EXECVE event not being that pretty but gets the job done, will think of other way to loop through different number of argc
+// TODO: PROCTITLE
+//
+let EXECVE =() {
+Syslog
+| where ProcessName == "audispd"
+| parse SyslogMessage with "type=" type " msg=" EventData
+| project TimeGenerated, type, Computer, EventData
+| where type == "EXECVE"
+| parse EventData with * "audit(" timestampid  "): argc=" argc " a0=\"" a0 "\"" args
+| extend argc = toint(argc)
+| extend a1 = iif(argc >= 2, (extract("a1=\"([^\"]+)\"[[:space:]]?",1,args)),"")
+| extend a2 = iif(argc >= 3, (extract("a2=\"([^\"]+)\"[[:space:]]?",1,args)),"")
+| extend a3 = iif(argc >= 4, (extract("a3=\"([^\"]+)\"[[:space:]]?",1,args)),"")
+| extend a4 = iif(argc >= 5, (extract("a4=\"([^\"]+)\"[[:space:]]?",1,args)),"")
+| extend a5 = iif(argc >= 6, (extract("a5=\"([^\"]+)\"[[:space:]]?",1,args)),"")
+| extend a6 = iif(argc >= 7, (extract("a6=\"([^\"]+)\"[[:space:]]?",1,args)),"")
+| extend a7 = iif(argc >= 8, (extract("a7=\"([^\"]+)\"[[:space:]]?",1,args)),"")
+| extend a8 = iif(argc >= 9, (extract("a8=\"([^\"]+)\"[[:space:]]?",1,args)),"")
+| extend a9 = iif(argc >= 10, (extract("a9=\"([^\"]+)\"[[:space:]]?",1,args)),"")
+};
+let PATH =() {
+Syslog
+| where ProcessName == "audispd"
+| parse SyslogMessage with "type=" type " msg=" EventData
+| project TimeGenerated, type, Computer, EventData
+| where type == "PATH"
+| parse EventData with * "audit(" timestampid  "): item=" item "name=\"" name "\" inode=" inode "dev=" dev "mode=" mode "ouid=" ouid "ogid=" ogid "rdev=" rdev "nametype=" nametype "cap_fp=" cap_fp "cap_fi=" cap_fi "cap_fe=" cap_fe "cap_fver=" cap_fver "cap_frootid=" cap_frootid "OUID=\"" OUID "\" OGID=\"" OGID "\""
+};
+let SYSCALL =() {
+Syslog
+| where ProcessName == "audispd"
+| parse SyslogMessage with "type=" type " msg=" EventData
+| project TimeGenerated, type, Computer, EventData
+| where type == "SYSCALL"
+| parse EventData with * "audit(" timestampid  "):" arch "syscall=" syscall "success=" success "exit=" exit "a0=" a0 "a1=" a1 "a2=" a2 "a3=" a3 "items=" items "ppid=" ppid "pid=" pid "auid=" auid "uid=" uid "gid=" gid "euid=" euid "suid=" suid "fsuid=" fsuid "egid=" egid "sgid=" sgid "fsgid=" fsgid "tty=" tty "ses=" ses "comm=\"" comm "\" exe=\"" exe "\" subj=" subj "key=" key "ARCH=" ARCH "SYSCALL=" SYSCALL "AUID=\"" AUID "\" UID=\"" UID "\" GID=\"" GID "\" EUID=\"" EUID "\" SUID=\"" SUID "\" FSUID=\"" FSUID "\" EGID=\"" EGID "\" SGID=\"" SGID "\" FSGID=\"" FSGID "\""
+};
+(union isfuzzy=true EXECVE, PATH, SYSCALL)
